@@ -2,146 +2,73 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>我的班表</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+    <title>班表轉換器 - 快速匯入日曆</title>
     <style>
-        /* 參考 image_95bb77.png 的配色 */
-        body { background-color: #FDFCE8; font-family: "Microsoft JhengHei", sans-serif; }
-        
-        .calendar-container {
-            background-color: #FFFDF0;
-            border: 1px solid #E6D9B8;
-        }
-
-        /* 標題列樣式 */
-        .header-strip {
-            padding: 10px 15px;
-            display: flex;
-            justify-content: space-between;
-            align-items: baseline;
-            color: #8B572A; /* 棕色文字 */
-        }
-
-        /* 日曆內部格線與顏色 */
-        .fc { border: none !important; }
-        .fc-theme-standard td, .fc-theme-standard th { border: 1px solid #F0E6CC !important; }
-        
-        /* 星期列背景色 */
-        .fc-col-header-cell { background-color: #FFF9C4; padding: 5px 0 !important; }
-        .fc-day-sun .fc-col-header-cell-cushion { color: #D0021B; } /* 週日紅 */
-        .fc-day-sat .fc-col-header-cell-cushion { color: #4A90E2; } /* 週六藍 */
-
-        /* 班表標籤 - 簡約化 */
-        .shift-work { background-color: transparent !important; color: #D0021B !important; font-weight: bold !important; border: none !important; font-size: 0.8rem !important; }
-        .shift-off { background-color: transparent !important; color: #417505 !important; border: none !important; font-size: 0.8rem !important; }
-        .google-event { background-color: #FFECB3 !important; color: #8B572A !important; border: none !important; font-size: 0.75rem !important; }
-
-        .btn-today {
-            border: 1px solid #8B572A;
-            padding: 2px 10px;
-            color: #8B572A;
-            font-size: 0.9rem;
-            border-radius: 4px;
-        }
+        body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
+        .container { max-width: 500px; margin: auto; border: 1px solid #ddd; padding: 20px; border-radius: 8px; }
+        input { width: 100%; padding: 10px; margin: 10px 0; }
+        button { width: 100%; padding: 10px; background: #007bff; color: white; border: none; cursor: pointer; border-radius: 4px; }
+        button:hover { background: #0056b3; }
+        .note { font-size: 0.9em; color: #666; margin-top: 10px; }
     </style>
 </head>
-<body class="p-2">
+<body>
 
-    <div class="max-w-md mx-auto calendar-container rounded-sm shadow-sm">
-        <!-- 簡約頂部 -->
-        <div class="header-strip">
-            <div class="flex items-baseline gap-2">
-                <span id="yearText" class="text-xl">2026年</span>
-                <span id="monthText" class="text-3xl font-serif">5月</span>
-            </div>
-            <div class="flex gap-4">
-                <button onclick="calendar.prev()" class="text-xl">＜</button>
-                <button onclick="calendar.next()" class="text-xl">＞</button>
-                <button onclick="setBaseDate()" class="btn-today">設定</button>
-            </div>
-        </div>
-
-        <!-- 日曆本體 -->
-        <div id="calendar"></div>
-
-        <!-- 底部備註欄 - 參考圖片風格 -->
-        <div class="bg-[#FFF9C4] p-2 text-[#8B572A] text-sm border-t border-[#E6D9B8]">
-            待辦事項與備註
-        </div>
+<div class="container">
+    <h2>2 休 2 班表匯出工具</h2>
+    <label>請選擇「連續兩天上班」的第一天：</label>
+    <input type="date" id="startDate">
+    
+    <button onclick="generateICS()">生成未來半年班表 (.ics)</button>
+    
+    <div class="note">
+        * 點擊後會下載檔案，開啟 Google 日曆後選擇「設定」>「匯入」即可。<br>
+        * 加班日建議在匯入後，手動於 Google 日曆調整，以免與固定休假混淆。
     </div>
+</div>
 
 <script>
-let calendar;
-
-document.addEventListener('DOMContentLoaded', function() {
-    const calendarEl = document.getElementById('calendar');
-    calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'dayGridMonth',
-        locale: 'zh-tw',
-        height: 'auto',
-        headerToolbar: false, // 完全隱藏原生工具列
-        dayHeaderContent: function(arg) {
-            return arg.date.toLocaleDateString('zh-TW', {weekday: 'short'}).replace('週', '週');
-        },
-        datesSet: function(info) {
-            const title = info.view.title; // 例如 "2026年5月"
-            document.getElementById('yearText').innerText = title.substring(0, 5);
-            document.getElementById('monthText').innerText = title.substring(5);
-        },
-        // 點擊事件
-        eventClick: function(info) {
-            if (info.event.title === '上班') {
-                info.event.setProp('title', '加班');
-                info.event.setProp('classNames', ['shift-work']); 
-                info.event.setProp('display', 'block');
-            }
-        }
-    });
-    calendar.render();
-    generateShifts('2026-05-14'); // 預設一個起始點
-});
-
-function setBaseDate() {
-    const date = prompt("請輸入起始上班的第一天 (YYYY-MM-DD):", "2026-05-14");
-    if (date) generateShifts(date);
-}
-
-function generateShifts(startDate) {
-    calendar.removeAllEvents();
-    let current = new Date(startDate);
-    let events = [];
-    
-    // 產出半年份的 2 休 2
-    for (let i = 0; i < 180; i++) {
-        let cycle = i % 4;
-        let isWork = (cycle < 2);
-        events.push({
-            title: isWork ? '上班' : '放假',
-            start: current.toISOString().split('T')[0],
-            className: isWork ? 'shift-work' : 'shift-off',
-            allDay: true,
-            display: 'background' // 讓文字更像圖片那樣直接顯示在日期下面
-        });
-        
-        // 為了讓文字顯示出來，補一個普通 event
-        events.push({
-            title: isWork ? '上班' : '放假',
-            start: current.toISOString().split('T')[0],
-            className: isWork ? 'shift-work' : 'shift-off',
-            allDay: true
-        });
-        
-        current.setDate(current.getDate() + 1);
+function generateICS() {
+    const startInput = document.getElementById('startDate').value;
+    if (!startInput) {
+        alert("請先選擇起始日期");
+        return;
     }
-    
-    // 模擬 Google 日曆連動的行程
-    events.push({ title: '回學甲看媽媽', start: '2026-05-20', className: 'google-event', allDay: true });
-    events.push({ title: '女友約會', start: '2026-05-23', className: 'google-event', allDay: true });
 
-    calendar.addEventSource(events);
+    let startDate = new Date(startInput);
+    let endDate = new Date();
+    endDate.setMonth(endDate.getMonth() + 6); // 產出半年份
+
+    let icsContent = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Work Schedule//TW\nMETHOD:PUBLISH\n";
+    
+    let current = new Date(startDate);
+    
+    while (current <= endDate) {
+        // 二休二循環邏輯：第 0, 1 天上班，第 2, 3 天休息
+        for (let i = 0; i < 4; i++) {
+            if (i < 2 && current <= endDate) {
+                let dateStr = current.toISOString().replace(/-|:|\.\d+/g, "").split("T")[0];
+                icsContent += "BEGIN:VEVENT\n";
+                icsContent += `DTSTART;VALUE=DATE:${dateStr}\n`;
+                icsContent += `DTEND;VALUE=DATE:${dateStr}\n`;
+                icsContent += "SUMMARY:上班 (南茂)\n";
+                icsContent += "DESCRIPTION:二休二固定班表\n";
+                icsContent += "END:VEVENT\n";
+            }
+            current.setDate(current.getDate() + 1);
+        }
+    }
+
+    icsContent += "END:VCALENDAR";
+
+    // 下載檔案
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "work_schedule.ics";
+    link.click();
 }
 </script>
+
 </body>
 </html>
