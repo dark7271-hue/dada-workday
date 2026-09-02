@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>班表轉換器 - 快速匯入日曆</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
+        .container { max-width: 500px; margin: auto; border: 1px solid #ddd; padding: 20px; border-radius: 8px; }
+        input { width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background: #007bff; color: white; border: none; cursor: pointer; border-radius: 4px; margin-top: 10px; }
+        button:hover { background: #0056b3; }
+        .note { font-size: 0.9em; color: #666; margin-top: 10px; }
+        label { font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>2 休 2 班表匯出工具</h2>
+    
+    <label for="startDate">請選擇「連續兩天上班」的第一天：</label>
+    <input type="date" id="startDate">
+
+    <label for="endDate">請選擇班表結束日期：</label>
+    <input type="date" id="endDate">
+    
+    <button onclick="generateICS()">生成班表 (.ics)</button>
+    
+    <div class="note">
+        * 點擊後會下載檔案，開啟 Google 日曆後選擇「設定」>「匯入」即可。<br>
+        * 加班日建議在匯入後，手動於 Google 日曆調整，以免與固定休假混淆。
+    </div>
+</div>
+
+<script>
+function generateICS() {
+    const startInput = document.getElementById('startDate').value;
+    const endInput = document.getElementById('endDate').value;
+
+    if (!startInput || !endInput) {
+        alert("請選擇起始日期與結束日期");
+        return;
+    }
+
+    let startDate = new Date(startInput);
+    let endDate = new Date(endInput);
+
+    if (endDate < startDate) {
+        alert("結束日期不能早於起始日期！");
+        return;
+    }
+
+    let icsContent = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Work Schedule//TW\nMETHOD:PUBLISH\n";
+    
+    let current = new Date(startDate);
+    
+    while (current <= endDate) {
+        // 二休二循環邏輯：第 0, 1 天上班，第 2, 3 天休息
+        for (let i = 0; i < 4; i++) {
+            if (i < 2 && current <= endDate) {
+                let dateStr = current.toISOString().replace(/-|:|\.\d+/g, "").split("T")[0];
+                icsContent += "BEGIN:VEVENT\n";
+                icsContent += `DTSTART;VALUE=DATE:${dateStr}\n`;
+                icsContent += `DTEND;VALUE=DATE:${dateStr}\n`;
+                icsContent += "SUMMARY:上班 (南茂)\n";
+                icsContent += "DESCRIPTION:二休二固定班表\n";
+                icsContent += "END:VEVENT\n";
+            }
+            current.setDate(current.getDate() + 1);
+        }
+    }
+
+    icsContent += "END:VCALENDAR";
+
+    // 下載檔案
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "work_schedule.ics";
+    link.click();
+}
+</script>
+
+</body>
+</html>
